@@ -1,0 +1,10 @@
+#+TITLE: Github Custom Pack Loader
+
+i guess we'll use this for telling the user to restart their game every time an update happens because
+can't figure out a way to hot load in mods lol
+
+https://github.com/shedaniel/RoughlyEnoughItems/blob/86b4955cbbe79d09aa580d536fe445291e593372/runtime/src/main/java/me/shedaniel/rei/impl/client/gui/screen/WarningAndErrorScreen.java
+
+* Todo
+- [ ] check sha hashing and only update those files
+- [ ] 
