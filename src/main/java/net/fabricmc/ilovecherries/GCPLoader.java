@@ -18,16 +18,16 @@ import java.util.Arrays;
 
 public class GCPLoader implements ModInitializer {
 	private static final String API_FORMAT = "https://api.github.com/repos/%s/%s";
+	private static final String MOD_FOLDER = MinecraftClient
+			.getInstance()
+			.runDirectory
+			.getAbsolutePath()
+			+ "/mods/%s";
 
 	private void parseGithubResponse(String data) {
 		Gson gson = new Gson();
 
 		FileMetadata[] fileArray = gson.fromJson(data, FileMetadata[].class);
-		final String MOD_FOLDER = MinecraftClient
-				.getInstance()
-				.runDirectory
-				.getAbsolutePath()
-				+ "/mods/%s";
 
 		// first, we should go through the cache that we have saved on our system and see if
 		// some of the mods need to be removed
@@ -105,15 +105,29 @@ public class GCPLoader implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		HttpClient client = HttpClient.newHttpClient();
+		File configFile = new File(String.format(MOD_FOLDER, "custompackconfig.json"));
 
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create(String.format(API_FORMAT, "ilovecherries/test-load-repo", "contents/")))
-				.build();
+		if (configFile.exists() && !configFile.isDirectory()) {
+			try {
+				String configData = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8);
+				Gson gson = new Gson();
+				GCPConfig config = gson.fromJson(configData, GCPConfig.class);
 
-		client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-				.thenApply(HttpResponse::body)
-				.thenAccept(this::parseGithubResponse)
-				.join();
+				HttpClient client = HttpClient.newHttpClient();
+
+				HttpRequest request = HttpRequest.newBuilder()
+						.uri(URI.create(String.format(API_FORMAT, "ilovecherries/test-load-repo", "contents/")))
+						.build();
+
+				client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+						.thenApply(HttpResponse::body)
+						.thenAccept(this::parseGithubResponse)
+						.join();
+			} catch (IOException e) {
+				System.err.println("Unable to load config file: " + e);
+			}
+		} else {
+			System.err.println("Missing config file (mods/custompackconfig.json) for Github Custom Pack Loader.");
+		}
 	}
 }

@@ -1,10 +1,13 @@
 #+TITLE: Github Custom Pack Loader
 
-i guess we'll use this for telling the user to restart their game every time an update happens because
-can't figure out a way to hot load in mods lol
+requires fabric and fabric api
 
-https://github.com/shedaniel/RoughlyEnoughItems/blob/86b4955cbbe79d09aa580d536fe445291e593372/runtime/src/main/java/me/shedaniel/rei/impl/client/gui/screen/WarningAndErrorScreen.java
+make a file named ~custompackconfig.json~ and fill it out accordingly:
 
-* Todo
-- [ ] check sha hashing and only update those files
-- [ ] 
+#+BEGIN_SRC js
+{
+    "repoURL": "[GITHUB USERNAME]/[REPO NAME]"
+}
+#+END_SRC
+
+distribute the mod loader with the config file and place them both in the "mods" folder
