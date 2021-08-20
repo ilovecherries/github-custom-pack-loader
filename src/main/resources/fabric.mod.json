@@ -19,12 +19,9 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.ilovecherries.GithubCustomPackLoader"
+      "net.fabricmc.ilovecherries.GCPLoader"
     ]
   },
-  "mixins": [
-    "modid.mixins.json"
-  ],
 
   "depends": {
     "fabricloader": ">=0.11.3",
