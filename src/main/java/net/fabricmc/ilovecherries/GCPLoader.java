@@ -101,6 +101,10 @@ public class GCPLoader implements ModInitializer {
 				}
 			}
 		}
+
+		if (GCPState.anyChange()) {
+			System.exit(-1);
+		}
 	}
 
 	@Override
