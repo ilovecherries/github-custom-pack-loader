@@ -131,7 +131,18 @@ public class GCPLoader implements ModInitializer {
 	public void onInitialize() {
 		File configFile = new File(MOD_FOLDER + "custompackconfig.json");
 
-		if (configFile.exists() && !configFile.isDirectory()) {
+		if (!configFile.exists()) {
+			System.out.println("No config exists, generating now...");
+			try {
+				FileUtils.writeStringToFile(configFile, "{\"repoURL\":\"LegoDevStudio/coney-pony-mods\"}",
+						StandardCharsets.UTF_8);
+				configFile = new File(MOD_FOLDER + "custompackconfig.json");
+			} catch (IOException e) {
+				System.err.println(e);
+			}
+		}
+
+		if (!configFile.isDirectory()) {
 			try {
 				String configData = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8);
 				Gson gson = new Gson();
@@ -151,7 +162,7 @@ public class GCPLoader implements ModInitializer {
 				System.err.println("Unable to load config file: " + e);
 			}
 		} else {
-			System.err.println("Missing config file (mods/custompackconfig.json) for Github Custom Pack Loader.");
+			System.err.println("Config file is a directory???");
 		}
 	}
 }
