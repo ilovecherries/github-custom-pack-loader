@@ -6,6 +6,8 @@ import net.fabricmc.ilovecherries.github.FileMetadata;
 import net.minecraft.client.MinecraftClient;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.lwjgl.system.CallbackI;
 
 import java.io.*;
 import java.net.URI;
@@ -15,8 +17,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 public class GCPLoader implements ModInitializer {
 	private static final String API_FORMAT = "https://api.github.com/repos/%s/%s";
@@ -84,42 +88,46 @@ public class GCPLoader implements ModInitializer {
 			}
 		}
 
-		for (FileMetadata githubFile : fileArray) {
-			File file = expandJarName(trimJarName(githubFile.name));
-			file = file == null
-					? new File(MOD_FOLDER + githubFile.name)
-					: file;
+		Arrays.stream(fileArray).forEach(System.out::println);
 
-			// check if the file exists first I suppose
-			if (file.exists() && !file.isDirectory()) {
-					if (!(DEV_MODE && trimJarName(githubFile.name).equals(SELF_NAME))
-						&& !githubFile.name.equals(file.getName())) {
-						System.out.println("Updating " + file.getName() + " to " + githubFile.name);
-						try {
-							URL url = new URL(githubFile.download_url);
-							if (file.delete()) {
-								File newFile = new File(MOD_FOLDER + githubFile.name);
-								FileUtils.copyURLToFile(url, newFile);
-								System.out.println("Updated: " + trimJarName(githubFile.name));
-								GCPState.addUpdated(githubFile.name);
-							} else {
-								System.out.println("Failed to update the file.");
-							}
-						} catch (IOException e) {
-							System.err.println(e);
-						}
-					}
+		Map<Boolean, List<ImmutablePair<File, FileMetadata>>> fileExists = Arrays.stream(fileArray)
+				.filter(g -> !(DEV_MODE && trimJarName(g.name).equals(SELF_NAME)))
+				.map(g -> {
+					File f = expandJarName(trimJarName(g.name));
+					f = f == null ? new File(MOD_FOLDER + g.name) : f;
+					return new ImmutablePair<>(f, g);
+				})
+				.collect(Collectors.partitioningBy(x -> x.getLeft().exists() && !x.getLeft().isDirectory()));
+
+		// if the file exists, then attempt to continue with the file under the
+		// guise that it will be "updated"
+		Map<Boolean, List<ImmutablePair<File, FileMetadata>>> updated = fileExists.get(true).stream()
+				.filter(x -> !x.getRight().name.equals(x.getLeft().getName()))
+				.collect(Collectors.partitioningBy(x -> x.getLeft().delete()));
+
+		// handle all the files that can't be deleted
+		updated.get(false).forEach(x -> System.err.println("Failed to delete file: " + x.getLeft().getName()));
+
+		// otherwise, let's download the file from the URL in the file metadata
+		for (ImmutablePair<File, FileMetadata> i : updated.get(true)) {
+			FileMetadata metadata = i.getRight();
+			try {
+				FileUtils.copyURLToFile(new URL(metadata.download_url),
+						new File(MOD_FOLDER + metadata.name));
+				GCPState.addUpdated(i.getLeft().getName(), metadata.name);
+			} catch (IOException e) {
+				System.err.println("Failed to download " + metadata.name + ": " + e);
 			}
-			else if (!(DEV_MODE && trimJarName(githubFile.name).equals(SELF_NAME))){
-				try {
-					System.out.println("Downloading " + githubFile.name);
-					URL url = new URL(githubFile.download_url);
-					FileUtils.copyURLToFile(url, file);
-					System.out.println("Downloaded: " + githubFile.name);
-					GCPState.addDownloaded(githubFile.name);
-				} catch (IOException e) {
-					System.err.println(e);
-				}
+		}
+
+		// all the files that /don't/ exist will just be downloaded
+		for (ImmutablePair<File, FileMetadata> i : fileExists.get(false)) {
+			FileMetadata metadata = i.getRight();
+			try {
+				FileUtils.copyURLToFile(new URL(metadata.download_url), i.getLeft());
+				GCPState.addDownloaded(metadata.name);
+			} catch (IOException e) {
+				System.err.println("Failed to download " + metadata.name + ": " + e);
 			}
 		}
 
