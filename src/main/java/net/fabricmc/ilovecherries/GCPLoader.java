@@ -26,7 +26,7 @@ public class GCPLoader implements ModInitializer {
 			.getAbsolutePath()
 			+ "/mods/";
 	private static final String EXPANDED_NAME_REGEX = "-[0-9].+\\.jar";
-	private static boolean DEV_MODE = false;
+	private static boolean DEV_MODE = true;
 	private static String SELF_NAME = "github-custom-pack-loader";
 
 	private String trimJarName(String name) {
@@ -92,22 +92,23 @@ public class GCPLoader implements ModInitializer {
 
 			// check if the file exists first I suppose
 			if (file.exists() && !file.isDirectory()) {
-				// check if the SHA-256 hash matches
-				try (InputStream is = new FileInputStream(file)) {
-					String hash = DigestUtils.sha256Hex(is);
 					if (!(DEV_MODE && trimJarName(githubFile.name).equals(SELF_NAME))
-						&& hash.equals(githubFile.sha)) {
+						&& !githubFile.name.equals(file.getName())) {
 						System.out.println("Updating " + file.getName() + " to " + githubFile.name);
-						URL url = new URL(githubFile.download_url);
-						file.delete();
-						File newFile = new File(MOD_FOLDER + githubFile.name);
-						FileUtils.copyURLToFile(url, newFile);
-						System.out.println("Updated: " + trimJarName(githubFile.name));
-						GCPState.addUpdated(githubFile.name);
+						try {
+							URL url = new URL(githubFile.download_url);
+							if (file.delete()) {
+								File newFile = new File(MOD_FOLDER + githubFile.name);
+								FileUtils.copyURLToFile(url, newFile);
+								System.out.println("Updated: " + trimJarName(githubFile.name));
+								GCPState.addUpdated(githubFile.name);
+							} else {
+								System.out.println("Failed to update the file.");
+							}
+						} catch (IOException e) {
+							System.err.println(e);
+						}
 					}
-				} catch (IOException e) {
-					System.err.println(e);
-				}
 			}
 			else if (!(DEV_MODE && trimJarName(githubFile.name).equals(SELF_NAME))){
 				try {
