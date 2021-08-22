@@ -4,10 +4,11 @@ import com.google.gson.Gson;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.ilovecherries.github.FileMetadata;
 import net.minecraft.client.MinecraftClient;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.lwjgl.system.CallbackI;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.net.URI;
@@ -16,10 +17,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class GCPLoader implements ModInitializer {
@@ -29,25 +27,31 @@ public class GCPLoader implements ModInitializer {
 			.runDirectory
 			.getAbsolutePath()
 			+ "/mods/";
-	private static final String EXPANDED_NAME_REGEX = "-[0-9].+\\.jar";
+	private static final String EXPANDED_NAME_REGEX = "(?i)-[0-9].+\\.jar";
 	private static boolean DEV_MODE = true;
 	private static String SELF_NAME = "github-custom-pack-loader";
 
-	private String trimJarName(String name) {
+	@Contract(pure = true)
+	private @NotNull String trimVersionTag(@NotNull String name) {
 		return name.replaceAll(EXPANDED_NAME_REGEX, "");
 	}
 
-	private File expandJarName(String filename) {
+	private @Nullable File expandFilename(String filename) {
 		File folder = new File(MOD_FOLDER);
 
 		if (DEV_MODE && filename.equals(SELF_NAME)) {
 			return null;
 		}
 
-		return Arrays.stream(folder.listFiles())
-				.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX))
-				.findFirst()
-				.orElse(null);
+		if (filename.toLowerCase(Locale.ROOT).endsWith(".JAR")) {
+			return Arrays.stream(folder.listFiles())
+					.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX))
+					.findFirst()
+					.orElse(null);
+		} else {
+			File file = new File(MOD_FOLDER + filename);
+			return file.exists() ? file : null;
+		}
 	}
 
 	private void parseGithubResponse(String data) {
@@ -66,8 +70,8 @@ public class GCPLoader implements ModInitializer {
 
 				Arrays.stream(cachedFileArray)
 					.filter(x -> Arrays.stream(fileArray)
-						.noneMatch(y -> trimJarName(x.name).equals(trimJarName(y.name))))
-					.map(x -> expandJarName(x.name))
+						.noneMatch(y -> trimVersionTag(x.name).equals(trimVersionTag(y.name))))
+					.map(x -> expandFilename(x.name))
 					.filter(Objects::nonNull)
 					.filter(File::delete)
 					.forEach(x -> GCPState.addDeleted(x.getName()));
@@ -88,12 +92,10 @@ public class GCPLoader implements ModInitializer {
 			}
 		}
 
-		Arrays.stream(fileArray).forEach(System.out::println);
-
 		Map<Boolean, List<ImmutablePair<File, FileMetadata>>> fileExists = Arrays.stream(fileArray)
-				.filter(g -> !(DEV_MODE && trimJarName(g.name).equals(SELF_NAME)))
+				.filter(g -> !(DEV_MODE && trimVersionTag(g.name).equals(SELF_NAME)))
 				.map(g -> {
-					File f = expandJarName(trimJarName(g.name));
+					File f = expandFilename(trimVersionTag(g.name));
 					f = f == null ? new File(MOD_FOLDER + g.name) : f;
 					return new ImmutablePair<>(f, g);
 				})
