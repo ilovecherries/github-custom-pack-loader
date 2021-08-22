@@ -28,8 +28,10 @@ public class GCPLoader implements ModInitializer {
 			.getAbsolutePath()
 			+ "/mods/";
 	private static final String EXPANDED_NAME_REGEX = "(?i)-[0-9].+\\.jar";
-	private static boolean DEV_MODE = true;
-	private static String SELF_NAME = "github-custom-pack-loader";
+	private static final boolean DEV_MODE = true;
+	private static final String CONFIG_FILENAME = "custompackconfig.json";
+	private static final String CACHE_FILENAME = "custompackcache.json";
+	private static final String SELF_NAME = "github-custom-pack-loader";
 
 	@Contract(pure = true)
 	private @NotNull String trimVersionTag(@NotNull String name) {
@@ -43,8 +45,9 @@ public class GCPLoader implements ModInitializer {
 			return null;
 		}
 
-		if (filename.toLowerCase(Locale.ROOT).endsWith(".JAR")) {
-			return Arrays.stream(folder.listFiles())
+		if (filename.toLowerCase(Locale.ROOT).endsWith(".jar")) {
+			File[] files = folder.listFiles();
+			return files == null ? null : Arrays.stream(files)
 					.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX))
 					.findFirst()
 					.orElse(null);
@@ -60,8 +63,8 @@ public class GCPLoader implements ModInitializer {
 		FileMetadata[] fileArray = gson.fromJson(data, FileMetadata[].class);
 
 		// first, we should go through the cache that we have saved on our system and see if
-		// some of the mods need to be removed
-		File cacheFile = new File(MOD_FOLDER + "custompackcache.json");
+		// some mods need to be removed
+		File cacheFile = new File(MOD_FOLDER + CACHE_FILENAME);
 
 		if (cacheFile.exists() && !cacheFile.isDirectory()) {
 			try {
@@ -79,16 +82,16 @@ public class GCPLoader implements ModInitializer {
 				try {
 					FileUtils.writeStringToFile(cacheFile, data, StandardCharsets.UTF_8);
 				} catch (IOException e) {
-					System.err.println(e);
+					System.err.println("Unable to write the cache file: " + e);
 				}
 			} catch (IOException e) {
-				System.err.println(e);
+				System.err.println("Unable to delete files: " + e);
 			}
 		} else {
 			try {
 				FileUtils.writeStringToFile(cacheFile, data, StandardCharsets.UTF_8);
 			} catch (IOException e) {
-				System.err.println(e);
+				System.err.println("Unable to write the cache file: " + e);
 			}
 		}
 
@@ -140,20 +143,20 @@ public class GCPLoader implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		File configFile = new File(MOD_FOLDER + "custompackconfig.json");
+		File configFile = new File(MOD_FOLDER + CONFIG_FILENAME);
 
 		if (!configFile.exists()) {
 			System.out.println("No config exists, generating now...");
 			try {
 				FileUtils.writeStringToFile(configFile, "{\"repoURL\":\"LegoDevStudio/coney-pony-mods\"}",
 						StandardCharsets.UTF_8);
-				configFile = new File(MOD_FOLDER + "custompackconfig.json");
+				configFile = new File(MOD_FOLDER + CONFIG_FILENAME);
 			} catch (IOException e) {
-				System.err.println(e);
+				System.err.println("Unable to generate a default config file: " + e);
 			}
 		}
 
-		if (!configFile.isDirectory()) {
+		if (configFile.exists() && !configFile.isDirectory()) {
 			try {
 				String configData = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8);
 				Gson gson = new Gson();
@@ -173,7 +176,7 @@ public class GCPLoader implements ModInitializer {
 				System.err.println("Unable to load config file: " + e);
 			}
 		} else {
-			System.err.println("Config file is a directory???");
+			System.err.println("Unable to find a config file.");
 		}
 	}
 }
