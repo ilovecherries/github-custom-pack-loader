@@ -48,16 +48,12 @@ public class GCPLoader implements ModInitializer {
 			return null;
 		}
 
-		if (filename.toLowerCase(Locale.ROOT).endsWith(".jar")) {
-			File[] files = folder.listFiles();
-			return files == null ? null : Arrays.stream(files)
-					.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX))
-					.findFirst()
-					.orElse(null);
-		} else {
-			File file = new File(MOD_FOLDER + filename);
-			return file.exists() ? file : null;
-		}
+		File[] files = folder.listFiles();
+		return files == null ? null : Arrays.stream(files)
+				.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX)
+						|| x.getName().equals(filename))
+				.findFirst()
+				.orElse(null);
 	}
 
 	private void parseGithubResponse(String data) {
@@ -77,8 +73,8 @@ public class GCPLoader implements ModInitializer {
 				Arrays.stream(cachedFileArray)
 					.filter(x -> Arrays.stream(fileArray)
 						.noneMatch(y -> trimVersionTag(x.name).equals(trimVersionTag(y.name))))
-					.map(x -> expandFilename(x.name))
-					.filter(Objects::nonNull)
+					.map(x -> new File(MOD_FOLDER + x.name))
+					.filter(File::exists)
 					.filter(File::delete)
 					.forEach(x -> GCPState.addDeleted(x.getName()));
 
