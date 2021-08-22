@@ -28,10 +28,13 @@ public class GCPLoader implements ModInitializer {
 			.getAbsolutePath()
 			+ "/mods/";
 	private static final String EXPANDED_NAME_REGEX = "(?i)-[0-9].+\\.jar";
-	private static final boolean DEV_MODE = true;
+	private static final boolean DEV_MODE = false;
 	private static final String CONFIG_FILENAME = "custompackconfig.json";
 	private static final String CACHE_FILENAME = "custompackcache.json";
 	private static final String SELF_NAME = "github-custom-pack-loader";
+	// this is used to generate a config file if it isn't already found
+	// i will replace this with a gradle build config parameter at some point
+	private static final String DEFAULT_REPO = "LegoDevStudio/coney-pony-mods";
 
 	@Contract(pure = true)
 	private @NotNull String trimVersionTag(@NotNull String name) {
@@ -144,12 +147,13 @@ public class GCPLoader implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		File configFile = new File(MOD_FOLDER + CONFIG_FILENAME);
+		Gson gson = new Gson();
 
-		if (!configFile.exists()) {
+		if (!DEFAULT_REPO.isEmpty() && !configFile.exists()) {
 			System.out.println("No config exists, generating now...");
 			try {
-				FileUtils.writeStringToFile(configFile, "{\"repoURL\":\"LegoDevStudio/coney-pony-mods\"}",
-						StandardCharsets.UTF_8);
+				GCPConfig config = new GCPConfig(DEFAULT_REPO);
+				FileUtils.writeStringToFile(configFile, gson.toJson(config), StandardCharsets.UTF_8);
 				configFile = new File(MOD_FOLDER + CONFIG_FILENAME);
 			} catch (IOException e) {
 				System.err.println("Unable to generate a default config file: " + e);
@@ -159,7 +163,6 @@ public class GCPLoader implements ModInitializer {
 		if (configFile.exists() && !configFile.isDirectory()) {
 			try {
 				String configData = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8);
-				Gson gson = new Gson();
 				GCPConfig config = gson.fromJson(configData, GCPConfig.class);
 
 				HttpClient client = HttpClient.newHttpClient();
