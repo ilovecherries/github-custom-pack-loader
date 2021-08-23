@@ -8,7 +8,7 @@ import java.util.Vector;
 public class GCPState {
     private static Vector<String> downloaded = new Vector<>();
     private static Vector<String> deleted = new Vector<>();
-    private static Vector<ImmutablePair<String, String>> updated = new Vector<>();
+    private static Vector<String> updated = new Vector<>();
 
     public static Vector<String> getDownloaded() {
         return downloaded;
@@ -28,13 +28,13 @@ public class GCPState {
         deleted.add(entry);
     }
 
-    public static Vector<ImmutablePair<String, String>> getUpdated() {
+    public static Vector<String> getUpdated() {
         return updated;
     }
 
-    public static void addUpdated(String from, String to) {
-        System.out.println("Updated: " + from + " to " + to);
-        updated.add(new ImmutablePair<>(from, to));
+    public static void addUpdated(String entry) {
+        System.out.println("Updated: " + entry);
+        updated.add(entry);
     }
 
     public static boolean anyChange() {

@@ -17,8 +17,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class GCPLoader implements ModInitializer {
 	private static final String API_FORMAT = "https://api.github.com/repos/%s/%s";
@@ -41,19 +45,39 @@ public class GCPLoader implements ModInitializer {
 		return name.replaceAll(EXPANDED_NAME_REGEX, "");
 	}
 
-	private @Nullable File expandFilename(String filename) {
-		File folder = new File(MOD_FOLDER);
+	private @Nullable Path expandFilename(String filename) {
+		Path folder = Paths.get(MOD_FOLDER);
 
 		if (DEV_MODE && filename.equals(SELF_NAME)) {
 			return null;
 		}
 
-		File[] files = folder.listFiles();
-		return files == null ? null : Arrays.stream(files)
-				.filter(x -> x.getName().matches(filename + EXPANDED_NAME_REGEX)
-						|| x.getName().equals(filename))
-				.findFirst()
-				.orElse(null);
+		try {
+			Stream<Path> files = Files.list(folder);
+			return files.filter(x -> x.getFileName().toString().matches(filename + EXPANDED_NAME_REGEX)
+							|| x.getFileName().toString().equals(filename))
+					.findFirst()
+					.orElse(null);
+		} catch (IOException e) {
+			System.out.println("There was a problem getting files from the mods folder: " + e);
+			return null;
+		}
+	}
+
+	private @Nullable String downloadAndGetFilename(FileMetadata metadata) {
+		try {
+			final URL url = new URL(metadata.download_url);
+			try (InputStream is = url.openStream()) {
+				Path path = Paths.get(MOD_FOLDER + metadata.name);
+				Files.copy(is, path);
+				return path.getFileName().toString();
+			} catch (Exception e) {
+				System.err.println("There was an error downloading " + metadata.name + ": " + e);
+			}
+		} catch (IOException e) {
+			System.err.println("There was an error downloading " + metadata.name + ": " + e);
+		}
+		return null;
 	}
 
 	private void parseGithubResponse(String data) {
@@ -63,77 +87,76 @@ public class GCPLoader implements ModInitializer {
 
 		// first, we should go through the cache that we have saved on our system and see if
 		// some mods need to be removed
-		File cacheFile = new File(MOD_FOLDER + CACHE_FILENAME);
+		Path cacheFile = Paths.get(MOD_FOLDER + CACHE_FILENAME);
 
-		if (cacheFile.exists() && !cacheFile.isDirectory()) {
+		if (Files.exists(cacheFile) && !Files.isDirectory(cacheFile)) {
 			try {
-				String cachedData = FileUtils.readFileToString(cacheFile, StandardCharsets.UTF_8);
+				String cachedData = Files.readString(cacheFile);
 				FileMetadata[] cachedFileArray = gson.fromJson(cachedData, FileMetadata[].class);
 
 				Arrays.stream(cachedFileArray)
 					.filter(x -> Arrays.stream(fileArray)
 						.noneMatch(y -> trimVersionTag(x.name).equals(trimVersionTag(y.name))))
-					.map(x -> new File(MOD_FOLDER + x.name))
-					.filter(File::exists)
-					.filter(File::delete)
-					.forEach(x -> GCPState.addDeleted(x.getName()));
+					.map(x -> Paths.get(MOD_FOLDER + x.name))
+					.filter(Files::exists)
+					.forEach(x -> {try {
+						Files.delete(x);
+						GCPState.addDeleted(x.toString());
+					} catch (IOException e) {
+						System.err.println("There was a problem deleting " + x + ": " + e);
+					}
+					});
 
 				try {
-					FileUtils.writeStringToFile(cacheFile, data, StandardCharsets.UTF_8);
+					Files.writeString(cacheFile, data);
 				} catch (IOException e) {
 					System.err.println("Unable to write the cache file: " + e);
 				}
 			} catch (IOException e) {
-				System.err.println("Unable to delete files: " + e);
+				System.err.println("Unable to read from cache file: " + e);
 			}
 		} else {
 			try {
-				FileUtils.writeStringToFile(cacheFile, data, StandardCharsets.UTF_8);
+				Files.writeString(cacheFile, data);
 			} catch (IOException e) {
 				System.err.println("Unable to write the cache file: " + e);
 			}
 		}
 
-		Map<Boolean, List<ImmutablePair<File, FileMetadata>>> fileExists = Arrays.stream(fileArray)
+		Map<Boolean, List<ImmutablePair<Path, FileMetadata>>> fileExists = Arrays.stream(fileArray)
 				.filter(g -> !(DEV_MODE && trimVersionTag(g.name).equals(SELF_NAME)))
 				.map(g -> {
-					File f = expandFilename(trimVersionTag(g.name));
-					f = f == null ? new File(MOD_FOLDER + g.name) : f;
+					Path f = expandFilename(trimVersionTag(g.name));
+					f = f == null ? Paths.get(MOD_FOLDER + g.name) : f;
 					return new ImmutablePair<>(f, g);
 				})
-				.collect(Collectors.partitioningBy(x -> x.getLeft().exists() && !x.getLeft().isDirectory()));
+				.collect(Collectors.partitioningBy(x -> Files.exists(x.getLeft()) && !Files.isDirectory(x.getLeft())));
 
 		// if the file exists, then attempt to continue with the file under the
 		// guise that it will be "updated"
-		Map<Boolean, List<ImmutablePair<File, FileMetadata>>> updated = fileExists.get(true).stream()
-				.filter(x -> !x.getRight().name.equals(x.getLeft().getName()))
-				.collect(Collectors.partitioningBy(x -> x.getLeft().delete()));
+		Map<Boolean, List<ImmutablePair<Path, FileMetadata>>> updated = fileExists.get(true).stream()
+				.filter(x -> !x.getRight().name.equals(x.getLeft().getFileName().toString()))
+				.collect(Collectors.partitioningBy(x -> {
+					try {
+						Files.delete(x.getLeft());
+						return true;
+					} catch (IOException e) {
+						System.err.println("Failed to delete "
+								+ x.getLeft().getFileName().toString()
+								+ ": " + e);
+						return false;
+					}
+				}));
 
-		// handle all the files that can't be deleted
-		updated.get(false).forEach(x -> System.err.println("Failed to delete file: " + x.getLeft().getName()));
+		updated.get(true).stream()
+				.map(x -> downloadAndGetFilename(x.getRight()))
+				.filter(Objects::nonNull)
+				.forEach(GCPState::addUpdated);
 
-		// otherwise, let's download the file from the URL in the file metadata
-		for (ImmutablePair<File, FileMetadata> i : updated.get(true)) {
-			FileMetadata metadata = i.getRight();
-			try {
-				FileUtils.copyURLToFile(new URL(metadata.download_url),
-						new File(MOD_FOLDER + metadata.name));
-				GCPState.addUpdated(i.getLeft().getName(), metadata.name);
-			} catch (IOException e) {
-				System.err.println("Failed to download " + metadata.name + ": " + e);
-			}
-		}
-
-		// all the files that /don't/ exist will just be downloaded
-		for (ImmutablePair<File, FileMetadata> i : fileExists.get(false)) {
-			FileMetadata metadata = i.getRight();
-			try {
-				FileUtils.copyURLToFile(new URL(metadata.download_url), i.getLeft());
-				GCPState.addDownloaded(metadata.name);
-			} catch (IOException e) {
-				System.err.println("Failed to download " + metadata.name + ": " + e);
-			}
-		}
+		fileExists.get(false).stream()
+				.map(x -> downloadAndGetFilename(x.getRight()))
+				.filter(Objects::nonNull)
+				.forEach(GCPState::addDownloaded);
 
 		if (GCPState.anyChange()) {
 			System.exit(-1);
